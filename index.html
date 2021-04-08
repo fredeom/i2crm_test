@@ -1,0 +1,107 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script type="application/javascript" src="https://unpkg.com/react@16.0.0/umd/react.production.min.js"></script>
+    <script type="application/javascript" src="https://unpkg.com/react-dom@16.0.0/umd/react-dom.production.min.js"></script>
+    <script type="application/javascript" src="https://unpkg.com/babel-standalone@6.26.0/babel.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+
+      class App extends React.Component {
+        constructor(props) {
+          super(props);
+          this.state = {users : props.users, editUser: '', timeout: null, repos: []};
+          this.updateRepos();
+        }
+        handleKeyPress = (e) => {
+          if(e.key == 'Enter' && this.state.editUser != ''){
+            this.setState((s) => {
+                const susers = s.users.slice();
+                susers.push(s.editUser);
+                return ({users: susers, editUser: ''});
+              },
+              () => this.updateRepos()
+            );
+          }
+        }
+
+        handleChange(e) {
+          this.setState({editUser: e.target.value});
+        }
+
+        handleUserClick = (user) => {
+          return (e) => {
+            this.setState((s) => ({users: s.users.filter(currUser => currUser != user)}), () => this.updateRepos())
+          }
+        }
+        
+        updateRepos = () => {
+          if (this.state.timeout) {
+            clearTimeout(this.state.timeout);
+          }
+          Promise.all(this.state.users.map(user => axios.get('https://api.github.com/users/' + user + '/repos')))
+          .then((usersReposPromises) => {
+            const repos = [];
+            usersReposPromises.map(usersReposPromise => usersReposPromise.data).map(acc => {
+              acc.map(repo => {
+                repos.push({name: repo.name, html_url: repo.html_url, updated_at: repo.updated_at});
+              })
+            })
+            repos.sort((a,b) => (a.updated_at > b.updated_at) ? -1 : ((b.updated_at > a.updated_at) ? 1 : 0))
+            this.setState({repos: repos.slice(0, 10), timeout : setTimeout(this.updateRepos, 10 * 60 * 1000)});
+          })
+        }
+
+        render() {
+          return(
+            <div>
+              <h3>Edit input and press enter to add user to list</h3>
+              <input
+                value={this.state.editUser}
+                onKeyPress={this.handleKeyPress}
+                onChange={(e) => this.handleChange(e)}
+              />
+              <hr />
+              <h3>Click to remove from list</h3>
+              {
+                this.state.users.map(user => (<span style={{marginRight: "1em"}} onClick={this.handleUserClick(user)}>{user}</span>))
+              }
+              <hr />
+              <table border={1}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Updated_at</th>
+                    <th>Link to repo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {
+                    this.state.repos.map(repo => (
+                      <tr>
+                        <td>{repo.name}</td>
+                        <td>{repo.updated_at}</td>
+                        <td><a href={repo.html_url}>{repo.html_url}</a></td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      }
+
+      axios.get('users.txt').then((users) => {
+        ReactDOM.render(
+          <App users={users.data.split(' ')} />,
+          document.getElementById('root')
+        )
+      });
+    </script>
+  </body>
+</html>
